@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>台灣美食地圖 — 全台餐廳推薦與食記收藏</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700;900&display=swap');
+:root {
+  --primary:#FF6B35;--primary-light:#FF8F65;--primary-dark:#E5531F;
+  --bg:#F8F6F3;--card:#FFFFFF;--text:#1A1A2E;--text-sec:#6B7280;
+  --border:#E5E7EB;--shadow:0 4px 24px rgba(0,0,0,0.06);
+  --north:#2563EB;--central:#059669;--south:#DC2626;--east:#7C3AED;--island:#0891B2;
+  --glass:rgba(255,255,255,0.72);--blur:saturate(180%) blur(16px);
+  --radius:16px;--radius-sm:10px;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Noto Sans TC',system-ui,sans-serif;background:var(--bg);color:var(--text);line-height:1.7;-webkit-font-smoothing:antialiased;}
+::selection{background:var(--primary);color:#fff;}
+
+/* ── Hero ── */
+.hero{position:relative;background:linear-gradient(135deg,#1A1A2E 0%,#16213E 40%,#0F3460 100%);color:#fff;padding:3rem 1.5rem 2rem;text-align:center;overflow:hidden;}
+.hero::before{content:'';position:absolute;top:-50%;left:-50%;width:200%;height:200%;background:radial-gradient(circle at 30% 50%,rgba(255,107,53,0.15) 0%,transparent 50%),radial-gradient(circle at 70% 80%,rgba(8,145,178,0.12) 0%,transparent 40%);animation:heroShimmer 8s ease-in-out infinite alternate;}
+@keyframes heroShimmer{0%{transform:translate(0,0)}100%{transform:translate(-3%,2%)}}
+.hero h1{font-size:2.4rem;font-weight:900;letter-spacing:2px;position:relative;}
+.hero h1 span{background:linear-gradient(90deg,var(--primary),#F7C948);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.hero-sub{opacity:0.8;font-size:1rem;margin-top:0.3rem;font-weight:300;position:relative;}
+.stats-row{display:flex;justify-content:center;gap:1rem;margin-top:1.2rem;flex-wrap:wrap;position:relative;}
+.stat-chip{background:rgba(255,255,255,0.1);backdrop-filter:var(--blur);border:1px solid rgba(255,255,255,0.15);padding:0.35rem 1rem;border-radius:999px;font-size:0.82rem;font-weight:500;}
+
+/* ── Layout ── */
+.container{max-width:1280px;margin:0 auto;padding:0 1rem;}
+
+/* ── Search ── */
+.search-wrap{position:relative;margin:-1.5rem auto 0;max-width:720px;z-index:20;padding:0 1rem;}
+.search-input{width:100%;padding:1rem 1.2rem 1rem 3rem;border:none;border-radius:var(--radius);background:var(--card);box-shadow:0 8px 32px rgba(0,0,0,0.1);font-size:1rem;outline:none;transition:box-shadow .3s;}
+.search-input:focus{box-shadow:0 8px 40px rgba(255,107,53,0.18);}
+.search-icon{position:absolute;left:2rem;top:50%;transform:translateY(-50%);font-size:1.1rem;color:var(--text-sec);pointer-events:none;}
+
+/* ── Filters ── */
+.filter-panel{margin-top:1.2rem;padding:1.2rem;background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);}
+.filter-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:0.6rem;}
+.filter-title{font-weight:700;font-size:0.92rem;color:var(--text);}
+.clear-btn{background:none;border:none;color:var(--primary);cursor:pointer;font-size:0.82rem;font-weight:500;}
+.clear-btn:hover{text-decoration:underline;}
+.filter-group{margin-bottom:0.7rem;}
+.filter-label{font-size:0.78rem;font-weight:600;color:var(--text-sec);text-transform:uppercase;letter-spacing:1px;margin-bottom:0.35rem;display:block;}
+.pills{display:flex;flex-wrap:wrap;gap:6px;}
+.pill{padding:0.3rem 0.7rem;border:1.5px solid var(--border);border-radius:999px;background:transparent;cursor:pointer;font-size:0.78rem;font-weight:500;color:var(--text-sec);transition:all .2s;white-space:nowrap;}
+.pill:hover{border-color:var(--primary);color:var(--primary);}
+.pill.on{background:var(--primary);color:#fff;border-color:var(--primary);}
+.pill.r-north.on{background:var(--north);border-color:var(--north);}
+.pill.r-central.on{background:var(--central);border-color:var(--central);}
+.pill.r-south.on{background:var(--south);border-color:var(--south);}
+.pill.r-east.on{background:var(--east);border-color:var(--east);}
+.pill.r-island.on{background:var(--island);border-color:var(--island);}
+
+.sort-bar{display:flex;align-items:center;gap:0.6rem;margin-top:0.5rem;}
+.sort-bar label{font-size:0.78rem;font-weight:600;color:var(--text-sec);}
+.sort-select{padding:0.3rem 0.6rem;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:0.8rem;background:#fff;outline:none;}
+
+/* ── View Toggle ── */
+.view-bar{display:flex;justify-content:space-between;align-items:center;margin:1rem 0 0.6rem;}
+.view-toggle{display:flex;background:var(--card);border-radius:var(--radius-sm);overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.06);}
+.view-btn{padding:0.5rem 1.1rem;border:none;background:transparent;cursor:pointer;font-size:0.85rem;font-weight:600;color:var(--text-sec);transition:all .2s;}
+.view-btn.active{background:var(--primary);color:#fff;}
+.results-count{font-size:0.85rem;color:var(--text-sec);font-weight:500;}
+
+/* ── Tabs ── */
+.tabs{display:flex;gap:0;background:var(--card);border-radius:var(--radius-sm);overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.06);margin-bottom:1rem;}
+.tab-btn{flex:1;padding:0.65rem;border:none;background:transparent;cursor:pointer;font-size:0.88rem;font-weight:600;color:var(--text-sec);transition:all .2s;text-align:center;}
+.tab-btn.active{background:var(--text);color:#fff;}
+
+/* ── Map ── */
+#mapView{width:100%;height:520px;border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);margin-bottom:1.2rem;display:none;}
+#mapView.show{display:block;}
+
+/* ── Cards Grid ── */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:1rem;padding-bottom:2rem;}
+@media(max-width:720px){.grid{grid-template-columns:1fr;}}
+
+/* ── Card ── */
+.card{background:var(--card);border-radius:var(--radius);padding:1.3rem;box-shadow:0 2px 12px rgba(0,0,0,0.04);border-top:3px solid var(--border);transition:transform .25s,box-shadow .25s;position:relative;overflow:hidden;}
+.card::after{content:'';position:absolute;top:0;left:0;right:0;height:3px;opacity:0;transition:opacity .25s;}
+.card:hover{transform:translateY(-4px);box-shadow:0 12px 36px rgba(0,0,0,0.1);}
+.card:hover::after{opacity:1;}
+.card.north{border-top-color:var(--north);}.card.north::after{background:var(--north);}
+.card.central{border-top-color:var(--central);}.card.central::after{background:var(--central);}
+.card.south{border-top-color:var(--south);}.card.south::after{background:var(--south);}
+.card.east{border-top-color:var(--east);}.card.east::after{background:var(--east);}
+.card.island{border-top-color:var(--island);}.card.island::after{background:var(--island);}
+
+.card-top{display:flex;justify-content:space-between;align-items:flex-start;gap:0.5rem;}
+.card-name{font-size:1.05rem;font-weight:700;line-height:1.3;}
+.rating-badge{flex-shrink:0;background:linear-gradient(135deg,#FDE68A,#FCD34D);color:#92400E;padding:0.2rem 0.55rem;border-radius:8px;font-size:0.78rem;font-weight:700;display:flex;align-items:center;gap:3px;}
+.rating-badge svg{width:12px;height:12px;fill:#92400E;}
+
+.card-desc{font-size:0.85rem;color:var(--text-sec);margin:0.45rem 0 0.6rem;line-height:1.5;}
+
+.tag-row{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:0.6rem;}
+.tag{padding:0.18rem 0.55rem;border-radius:6px;font-size:0.72rem;font-weight:600;letter-spacing:0.3px;}
+.tag-region{color:#fff;}
+.tag-region.north{background:var(--north);}.tag-region.central{background:var(--central);}
+.tag-region.south{background:var(--south);}.tag-region.east{background:var(--east);}.tag-region.island{background:var(--island);}
+.tag-cuisine{background:#ECFDF5;color:#065F46;}
+.tag-price{background:#FEF3C7;color:#92400E;}
+.tag-audience{background:#EFF6FF;color:#1E40AF;}
+
+.card-info{font-size:0.8rem;color:var(--text-sec);margin-bottom:0.5rem;display:flex;flex-wrap:wrap;gap:0.6rem;}
+.card-info span{display:flex;align-items:center;gap:3px;}
+
+.card-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:auto;}
+.action-btn{display:inline-flex;align-items:center;gap:4px;padding:0.35rem 0.7rem;border-radius:8px;font-size:0.76rem;font-weight:600;text-decoration:none;transition:all .2s;}
+.action-btn:hover{transform:scale(1.03);}
+.btn-maps{background:#4285F4;color:#fff;}
+.btn-review{background:var(--primary);color:#fff;}
+
+/* ── Platform & Blogger ── */
+.pf-card{background:var(--card);border-radius:var(--radius);padding:1.3rem;box-shadow:0 2px 12px rgba(0,0,0,0.04);border-left:4px solid #F59E0B;transition:transform .25s,box-shadow .25s;}
+.pf-card:hover{transform:translateY(-3px);box-shadow:0 8px 28px rgba(0,0,0,0.08);}
+.pf-card .card-name{color:#D97706;}
+.pf-type{background:#FFFBEB;color:#B45309;padding:0.15rem 0.5rem;border-radius:6px;font-size:0.75rem;font-weight:600;}
+.pf-features{font-size:0.82rem;color:var(--text-sec);margin:0.4rem 0;}
+.pf-link{display:inline-flex;align-items:center;gap:4px;padding:0.38rem 0.8rem;background:linear-gradient(135deg,#F59E0B,#D97706);color:#fff;border-radius:8px;text-decoration:none;font-size:0.8rem;font-weight:600;transition:transform .2s;}
+.pf-link:hover{transform:scale(1.03);}
+
+.bl-card{background:var(--card);border-radius:var(--radius);padding:1.3rem;box-shadow:0 2px 12px rgba(0,0,0,0.04);border-left:4px solid var(--east);transition:transform .25s,box-shadow .25s;}
+.bl-card:hover{transform:translateY(-3px);box-shadow:0 8px 28px rgba(0,0,0,0.08);}
+.bl-card .card-name{color:var(--east);}
+.bl-plat{background:#F5F3FF;color:#6D28D9;padding:0.15rem 0.5rem;border-radius:6px;font-size:0.75rem;font-weight:600;}
+
+/* ── Footer ── */
+footer{text-align:center;padding:2.5rem 1rem;color:var(--text-sec);font-size:0.82rem;border-top:1px solid var(--border);margin-top:1rem;background:var(--card);}
+footer a{color:var(--primary);text-decoration:none;}
+
+/* ── Leaflet popup ── */
+.leaflet-popup-content-wrapper{border-radius:12px!important;box-shadow:0 8px 28px rgba(0,0,0,0.12)!important;}
+.leaflet-popup-content{margin:10px 14px!important;font-family:'Noto Sans TC',sans-serif!important;line-height:1.5!important;}
+.popup-name{font-weight:700;font-size:0.95rem;margin-bottom:4px;}
+.popup-meta{font-size:0.8rem;color:#6B7280;}
+.popup-tags{display:flex;gap:4px;margin:6px 0;}
+.popup-link{display:inline-block;margin-top:6px;padding:4px 10px;background:#4285F4;color:#fff;border-radius:6px;font-size:0.75rem;text-decoration:none;font-weight:600;}
+
+/* ── Animations ── */
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+.card,.pf-card,.bl-card{animation:fadeUp .4s ease both;}
+
+/* ── Mobile ── */
+@media(max-width:600px){
+  .hero h1{font-size:1.6rem;}
+  .stats-row{gap:0.5rem;}
+  .stat-chip{font-size:0.75rem;padding:0.25rem 0.7rem;}
+  #mapView{height:360px;}
+}
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <h1><span>台灣美食地圖</span></h1>
+  <p class="hero-sub">全台 111 間精選餐廳 × 互動地圖 × 食記收藏</p>
+  <div class="stats-row">
+    <span class="stat-chip" id="statTotal">111 間餐廳</span>
+    <span class="stat-chip">5 大區域</span>
+    <span class="stat-chip" id="statCuisine">47 種料理</span>
+    <span class="stat-chip">2026-04-17 更新</span>
+  </div>
+</div>
+
+<div class="search-wrap">
+  <span class="search-icon">&#128269;</span>
+  <input class="search-input" id="searchInput" placeholder="搜尋餐廳、料理、地區..." autocomplete="off">
+</div>
+
+<div class="container">
+  <div class="filter-panel" style="margin-top:1.4rem;">
+    <div class="filter-header">
+      <span class="filter-title">篩選條件</span>
+      <button class="clear-btn" onclick="clearAll()">清除全部</button>
+    </div>
+
+    <div class="filter-group">
+      <span class="filter-label">區域</span>
+      <div class="pills" id="regionPills">
+        <button class="pill r-north" data-f="region" data-v="北部">北部</button>
+        <button class="pill r-central" data-f="region" data-v="中部">中部</button>
+        <button class="pill r-south" data-f="region" data-v="南部">南部</button>
+        <button class="pill r-east" data-f="region" data-v="東部">東部</button>
+        <button class="pill r-island" data-f="region" data-v="離島">離島</button>
+      </div>
+    </div>
+
+    <div class="filter-group">
+      <span class="filter-label">料理種類</span>
+      <div class="pills" id="cuisinePills"></div>
+    </div>
+
+    <div class="filter-group">
+      <span class="filter-label">適合客群</span>
+      <div class="pills" id="audiencePills"></div>
+    </div>
+
+    <div class="filter-group">
+      <span class="filter-label">價位區間</span>
+      <div class="pills" id="pricePills">
+        <button class="pill" data-f="price" data-v="$100以下">$100以下</button>
+        <button class="pill" data-f="price" data-v="$100-300">$100-300</button>
+        <button class="pill" data-f="price" data-v="$300-600">$300-600</button>
+        <button class="pill" data-f="price" data-v="$600-1000">$600-1000</button>
+        <button class="pill" data-f="price" data-v="$1000以上">$1000+</button>
+      </div>
+    </div>
+
+    <div class="sort-bar">
+      <label>排序</label>
+      <select class="sort-select" id="sortSel">
+        <option value="rating-desc">評分高→低</option>
+        <option value="name">名稱 A-Z</option>
+        <option value="price-asc">價位低→高</option>
+        <option value="price-desc">價位高→低</option>
+        <option value="region">依區域</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div style="margin-top:1rem;">
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="restaurants">餐廳推薦</button>
+      <button class="tab-btn" data-tab="platforms">美食平台</button>
+      <button class="tab-btn" data-tab="bloggers">美食創作者</button>
+    </div>
+  </div>
+
+  <!-- View Toggle -->
+  <div class="view-bar" id="viewBar">
+    <div class="view-toggle">
+      <button class="view-btn active" data-view="list">列表</button>
+      <button class="view-btn" data-view="map">地圖</button>
+    </div>
+    <span class="results-count" id="resultsCount"></span>
+  </div>
+
+  <!-- Map -->
+  <div id="mapView"></div>
+
+  <!-- Grid -->
+  <div class="grid" id="mainGrid"></div>
+</div>
+
+<footer>
+  <p><strong>台灣美食地圖</strong> — 資料來源：愛食記 · 窩客島 · Google Maps · 米其林指南 · 食尚玩家 · Dcard · PTT</p>
+  <p style="margin-top:0.3rem;">最後更新 2026-04-17 ｜ 實際營業資訊請以店家公告為準</p>
+</footer>
+
+<script>
+/* ================================================================
+   DATA
+   ================================================================ */
+// City → approx [lat, lng] + jitter per district
+const cityCoords = {
+  '台北市':[25.033,121.565],'新北市':[25.012,121.465],'基隆市':[25.128,121.739],
+  '桃園市':[24.994,121.300],'新竹市':[24.804,120.969],'宜蘭縣':[24.752,121.753],
+  '台中市':[24.147,120.674],'彰化縣':[24.080,120.538],'南投縣':[23.961,120.972],
+  '雲林縣':[23.709,120.431],'苗栗縣':[24.565,120.821],
+  '台南市':[22.999,120.227],'高雄市':[22.627,120.301],'嘉義市':[23.480,120.449],
+  '屏東縣':[22.551,120.548],
+  '花蓮縣':[23.992,121.601],'台東縣':[22.756,121.144],
+  '金門縣':[24.449,118.377],'連江縣':[26.160,119.950],'澎湖縣':[23.571,119.579]
+};
+function jitter(base,i){return[base[0]+(Math.sin(i*7.3)*0.012),base[1]+(Math.cos(i*5.1)*0.015)];}
+function getLL(r,i){
+  if(r.city==='台東縣'&&r.district==='蘭嶼') return [22.05,121.55];
+  if(r.city==='台東縣'&&r.district==='綠島') return [22.66,121.48];
+  const b=cityCoords[r.city]||[23.5,121];
+  return jitter(b,i);
+}
+
+const restaurants = [
+  {"name":"鮨天本","cuisine":"日料","audience":"商務宴客、約會聚餐","region":"北部","city":"台北市","district":"中山區","price_range":"$1000以上","rating":4.8,"google_maps_url":"https://www.google.com/maps/search/鮨天本+台北市中山區","address":"台北市中山區","review_url":"https://ifoodie.tw/","source":"米其林指南、愛食記","description":"米其林二星壽司餐廳，頂級海鮮無菜單"},
+  {"name":"詹記","cuisine":"火鍋","audience":"約會聚餐、朋友聚會","region":"北部","city":"台北市","district":"西門町","price_range":"$600-1000","rating":4.6,"google_maps_url":"https://www.google.com/maps/search/詹記火鍋+台北市","address":"台北市西門町","review_url":"https://ifoodie.tw/","source":"愛食記、Dcard","description":"全台最難訂火鍋名店，台式麻辣湯底"},
+  {"name":"吉兆割烹壽司","cuisine":"日料","audience":"商務宴客、特殊慶祝","region":"北部","city":"台北市","district":"大安區","price_range":"$1000以上","rating":4.8,"google_maps_url":"https://www.google.com/maps/search/吉兆割烹壽司+台北市大安區","address":"台北市大安區","review_url":"https://guide.michelin.com/tw/","source":"米其林指南","description":"米其林一星連續6年，全預約制壽司"},
+  {"name":"二本松涮涮屋","cuisine":"火鍋","audience":"約會聚餐、商務宴客","region":"北部","city":"台北市","district":"大安區","price_range":"$600-1000","rating":4.7,"google_maps_url":"https://www.google.com/maps/search/二本松涮涮屋+台北市","address":"台北市大安區","review_url":"https://ifoodie.tw/","source":"米其林指南、愛食記","description":"米其林一星火鍋，茶入湯底配頂級食材"},
+  {"name":"OUVERT SEOUL","cuisine":"咖啡","audience":"約會、下午茶、朋友聚會","region":"北部","city":"台北市","district":"信義區","price_range":"$100-300","rating":4.5,"google_maps_url":"https://www.google.com/maps/search/OUVERT+SEOUL+台北市信義區","address":"台北市信義區","review_url":"https://ifoodie.tw/","source":"愛食記","description":"韓國人氣咖啡廳海外首店，38公分巨大可頌"},
+  {"name":"TankQ Cafe & Bar","cuisine":"義式","audience":"朋友聚會、約會","region":"北部","city":"台北市","district":"松山區","price_range":"$300-600","rating":4.4,"google_maps_url":"https://www.google.com/maps/search/TankQ+Cafe+Bar+台北市","address":"台北市松山區忠孝敦化","review_url":"https://ifoodie.tw/","source":"愛食記","description":"卡通公仔主題餐廳，義大利麵與漢堡"},
+  {"name":"樂埔町","cuisine":"法式","audience":"約會聚餐、商務宴客","region":"北部","city":"台北市","district":"中正區","price_range":"$600-1000","rating":4.6,"google_maps_url":"https://www.google.com/maps/search/樂埔町+台北市","address":"台北市古亭","review_url":"https://ifoodie.tw/","source":"愛食記","description":"超過100年日式老屋，精緻法式料理"},
+  {"name":"狂一鍋","cuisine":"火鍋","audience":"學生族群、朋友聚會","region":"北部","city":"台北市","district":"西門町","price_range":"$100-300","rating":4.4,"google_maps_url":"https://www.google.com/maps/search/狂一鍋+台北市西門町","address":"台北市西門町","review_url":"https://ifoodie.tw/","source":"Dcard、愛食記","description":"網路票選10大必吃台式火鍋，酸菜魚鍋"},
+  {"name":"明月堂","cuisine":"日式甜點","audience":"觀光客、伴手禮","region":"北部","city":"新北市","district":"三重區","price_range":"$100-300","rating":4.5,"google_maps_url":"https://www.google.com/maps/search/明月堂+新北市三重","address":"新北市三重","review_url":"https://ifoodie.tw/","source":"愛食記","description":"90年歷史和菓子店，精美手工甜點"},
+  {"name":"ABV南洋餐酒館","cuisine":"南洋","audience":"朋友聚會、約會","region":"北部","city":"台北市","district":"大安區","price_range":"$300-600","rating":4.5,"google_maps_url":"https://www.google.com/maps/search/ABV南洋餐酒館+台北市","address":"台北市大安區","review_url":"https://ifoodie.tw/","source":"愛食記","description":"50多種南洋美食，300款精釀啤酒"},
+  {"name":"Maple Tree House","cuisine":"韓式","audience":"約會聚餐、朋友聚會","region":"北部","city":"台北市","district":"中山區","price_range":"$600-1000","rating":4.6,"google_maps_url":"https://www.google.com/maps/search/Maple+Tree+House+台北","address":"台北市中山區","review_url":"https://ifoodie.tw/","source":"CNN美食推薦","description":"CNN推薦世界最好吃韓國烤肉"},
+  {"name":"金豬食堂","cuisine":"韓式","audience":"約會、商務、朋友聚會","region":"北部","city":"台北市","district":"中山區","price_range":"$600-1000","rating":4.7,"google_maps_url":"https://www.google.com/maps/search/金豬食堂+台北市","address":"台北市中山區","review_url":"https://ifoodie.tw/","source":"米其林必比登","description":"首爾米其林7年推薦，專人桌邊燒烤"},
+  {"name":"合·shabu","cuisine":"火鍋","audience":"商務宴客、約會","region":"北部","city":"台北市","district":"信義區","price_range":"$1000以上","rating":4.7,"google_maps_url":"https://www.google.com/maps/search/合shabu+台北市信義區","address":"台北市信義區Bellavita","review_url":"https://ifoodie.tw/","source":"愛食記","description":"火鍋界愛馬仕，A5和牛帝王蟹"},
+  {"name":"興波咖啡","cuisine":"咖啡","audience":"約會、下午茶","region":"北部","city":"台北市","district":"大安區","price_range":"$100-300","rating":4.6,"google_maps_url":"https://www.google.com/maps/search/興波咖啡+台北市","address":"台北市大安區","review_url":"https://ifoodie.tw/","source":"愛食記","description":"WBC世界咖啡師冠軍開設"},
+  {"name":"雙月食品社","cuisine":"台菜","audience":"家庭聚餐、朋友聚會","region":"北部","city":"台北市","district":"中正區","price_range":"$100-300","rating":4.6,"google_maps_url":"https://www.google.com/maps/search/雙月食品社+台北市","address":"台北市","review_url":"https://guide.michelin.com/tw/","source":"米其林必比登","description":"米其林連續推薦，傳統台菜家常味"},
+  {"name":"駱記小炒","cuisine":"台菜","audience":"朋友聚會、下班小酌","region":"北部","city":"台北市","district":"大安區","price_range":"$100-300","rating":4.5,"google_maps_url":"https://www.google.com/maps/search/駱記小炒+台北市通化街","address":"台北市通化街夜市","review_url":"https://guide.michelin.com/tw/","source":"米其林必比登","description":"連續3年米其林推薦，只有6種熱炒"},
+  {"name":"PASTi Trattoria","cuisine":"義式","audience":"約會、聚餐","region":"北部","city":"台北市","district":"大安區","price_range":"$300-600","rating":4.6,"google_maps_url":"https://www.google.com/maps/search/PASTi+Trattoria+台北","address":"台北市大安區","review_url":"https://guide.michelin.com/tw/","source":"米其林餐盤","description":"主廚漁港直選食材，家庭式義大利"},
+  {"name":"Bencotto","cuisine":"義式","audience":"商務宴客、特殊慶祝","region":"北部","city":"台北市","district":"信義區","price_range":"$1000以上","rating":4.7,"google_maps_url":"https://www.google.com/maps/search/Bencotto+文華東方+台北","address":"台北市信義區文華東方酒店","review_url":"https://guide.michelin.com/tw/","source":"米其林推薦","description":"文華東方米其林推薦，華麗高雅"},
+  {"name":"Solo Pasta","cuisine":"義式","audience":"美食家、約會","region":"北部","city":"台北市","district":"中山區","price_range":"$300-600","rating":4.7,"google_maps_url":"https://www.google.com/maps/search/Solo+Pasta+台北","address":"台北市中山區","review_url":"https://ifoodie.tw/","source":"愛食記","description":"主廚堅持傳統義大利，麵不等人"},
+  {"name":"帕泰家","cuisine":"泰式","audience":"約會、聚餐","region":"北部","city":"台北市","district":"信義區","price_range":"$300-600","rating":4.6,"google_maps_url":"https://www.google.com/maps/search/帕泰家+台北市信義區","address":"台北市信義區新光三越","review_url":"https://ifoodie.tw/","source":"泰國米其林","description":"連年泰國必比登推薦，正宗泰菜"},
+  {"name":"大三元酒樓","cuisine":"港式","audience":"家庭聚餐、朋友聚會","region":"北部","city":"台北市","district":"中山區","price_range":"$300-600","rating":4.5,"google_maps_url":"https://www.google.com/maps/search/大三元酒樓+台北","address":"台北市中山區","review_url":"https://guide.michelin.com/tw/","source":"米其林一星","description":"台北第一家港點餐廳，道地點心"},
+  {"name":"波記茶餐廳","cuisine":"港式","audience":"朋友聚會、家庭用餐","region":"北部","city":"台北市","district":"大安區","price_range":"$100-300","rating":4.5,"google_maps_url":"https://www.google.com/maps/search/波記茶餐廳+台北市","address":"台北市東區延吉街","review_url":"https://ifoodie.tw/","source":"愛食記","description":"開業20年港式霸主，XO醬海鮮麵"},
+  {"name":"基隆廟口夜市","cuisine":"小吃","audience":"觀光客、美食愛好者","region":"北部","city":"基隆市","district":"仁愛區","price_range":"$100以下","rating":4.4,"google_maps_url":"https://www.google.com/maps/search/基隆廟口夜市","address":"基隆市仁愛區仁三路","review_url":"https://ifoodie.tw/","source":"食尚玩家","description":"全台著名夜市，300多攤海產小吃"},
+  {"name":"柯氏蔥油餅","cuisine":"小吃","audience":"上班族、學生、觀光客","region":"北部","city":"宜蘭縣","district":"礁溪鄉","price_range":"$100以下","rating":4.5,"google_maps_url":"https://www.google.com/maps/search/柯氏蔥油餅+宜蘭礁溪","address":"宜蘭縣礁溪","review_url":"https://ifoodie.tw/","source":"愛食記","description":"三星蔥油餅代表，酥脆又扎實"},
+  {"name":"番割田甕缸雞","cuisine":"台菜","audience":"家庭聚餐、朋友聚會","region":"北部","city":"宜蘭縣","district":"蘇澳鎮","price_range":"$300-600","rating":4.6,"google_maps_url":"https://www.google.com/maps/search/番割田甕缸雞+宜蘭","address":"宜蘭縣蘇澳","review_url":"https://ifoodie.tw/","source":"愛食記","description":"柴燒甕仔雞，外脆內嫩多汁"},
+  {"name":"Herbivore 草食動物","cuisine":"素食","audience":"素食者、健康飲食","region":"北部","city":"台北市","district":"信義區","price_range":"$300-600","rating":4.5,"google_maps_url":"https://www.google.com/maps/search/Herbivore+草食動物+台北","address":"台北市信義區","review_url":"https://ifoodie.tw/","source":"愛食記","description":"純蔬食Vegan餐廳，無添加物天然烹調"},
+  {"name":"祥和蔬食","cuisine":"素食","audience":"素食者、約會","region":"北部","city":"台北市","district":"大安區","price_range":"$300-600","rating":4.6,"google_maps_url":"https://www.google.com/maps/search/祥和蔬食+台北市","address":"台北市大安區","review_url":"https://guide.michelin.com/tw/","source":"米其林必比登","description":"連續3年米其林推薦，四川風味素菜"},
+  {"name":"柒息地串燒居酒屋","cuisine":"燒烤","audience":"朋友聚會、下班小酌","region":"北部","city":"台北市","district":"中山區","price_range":"$100-300","rating":4.6,"google_maps_url":"https://www.google.com/maps/search/柒息地串燒居酒屋+台北","address":"台北市長春路","review_url":"https://ifoodie.tw/","source":"愛食記","description":"平價串燒$19起，質感居酒屋"},
+  {"name":"ZEA","cuisine":"拉丁美洲","audience":"商務宴客、特殊慶祝","region":"北部","city":"台北市","district":"大安區","price_range":"$1000以上","rating":4.8,"google_maps_url":"https://www.google.com/maps/search/ZEA+restaurant+台北","address":"台北市大安區","review_url":"https://guide.michelin.com/tw/","source":"米其林一星","description":"阿根廷主廚融合亞洲食材創新料理"},
+  {"name":"MUME","cuisine":"現代歐洲","audience":"商務宴客、特殊慶祝","region":"北部","city":"台北市","district":"大安區","price_range":"$1000以上","rating":4.7,"google_maps_url":"https://www.google.com/maps/search/MUME+台北市","address":"台北市大安區","review_url":"https://guide.michelin.com/tw/","source":"米其林推薦","description":"現代歐洲料理融合台灣食材"},
+  {"name":"永康牛肉麵","cuisine":"台菜","audience":"上班族、觀光客","region":"北部","city":"台北市","district":"大安區","price_range":"$100-300","rating":4.5,"google_maps_url":"https://www.google.com/maps/search/永康牛肉麵+台北","address":"台北市永康街","review_url":"https://guide.michelin.com/tw/","source":"米其林必比登","description":"老字號川味紅燒牛肉麵必比登推薦"},
+  {"name":"鼎泰豐","cuisine":"台菜","audience":"觀光客、家庭聚餐","region":"北部","city":"台北市","district":"大安區","price_range":"$100-300","rating":4.4,"google_maps_url":"https://www.google.com/maps/search/鼎泰豐+信義路+台北","address":"台北市東門站","review_url":"https://guide.michelin.com/tw/","source":"米其林必比登","description":"觀光客必訪，道地小籠包"},
+  {"name":"上引水產","cuisine":"日料","audience":"上班族、美食愛好者","region":"北部","city":"台北市","district":"中山區","price_range":"$100-300","rating":4.5,"google_maps_url":"https://www.google.com/maps/search/上引水產+台北","address":"台北市中山區","review_url":"https://ifoodie.tw/","source":"愛食記","description":"站著吃海鮮丼，新鮮肥美生魚片"},
+  {"name":"天津蔥抓餅","cuisine":"小吃","audience":"上班族、學生族群","region":"北部","city":"台北市","district":"大安區","price_range":"$100以下","rating":4.3,"google_maps_url":"https://www.google.com/maps/search/天津蔥抓餅+永康街","address":"台北市永康街","review_url":"https://ifoodie.tw/","source":"愛食記","description":"排隊美食25元，酥脆蔥香"},
+  {"name":"好公道金雞園","cuisine":"台菜","audience":"家庭聚餐、經濟用餐","region":"北部","city":"台北市","district":"大安區","price_range":"$100-300","rating":4.5,"google_maps_url":"https://www.google.com/maps/search/好公道金雞園+台北","address":"台北市東門站","review_url":"https://guide.michelin.com/tw/","source":"米其林必比登","description":"超過50年老店，米其林推薦小籠包"},
+  {"name":"大橋頭筒仔米糕","cuisine":"小吃","audience":"美食愛好者、觀光客","region":"北部","city":"台北市","district":"大同區","price_range":"$100以下","rating":4.4,"google_maps_url":"https://www.google.com/maps/search/大橋頭筒仔米糕+台北","address":"台北市延三夜市","review_url":"https://guide.michelin.com/tw/","source":"米其林必比登","description":"蟬聯6年米其林推薦，古早味米糕"},
+  {"name":"炎上燒肉","cuisine":"燒烤","audience":"朋友聚會、約會","region":"北部","city":"新北市","district":"板橋區","price_range":"$600-1000","rating":4.5,"google_maps_url":"https://www.google.com/maps/search/炎上燒肉+板橋","address":"新北市板橋江子翠","review_url":"https://ifoodie.tw/","source":"Dcard","description":"平日598元起燒肉吃到飽，和牛生蠔"},
+  {"name":"蘑菇坊義麵館","cuisine":"義式","audience":"上班族、朋友聚會","region":"北部","city":"桃園市","district":"龜山區","price_range":"$100-300","rating":4.4,"google_maps_url":"https://www.google.com/maps/search/蘑菇坊義麵館+桃園龜山","address":"桃園市龜山後街","review_url":"https://ifoodie.tw/","source":"愛食記","description":"桃園老字號義麵店，焗烤燉飯"},
+  {"name":"東門文昌雞飯","cuisine":"台菜","audience":"上班族、觀光客","region":"北部","city":"新竹市","district":"東區","price_range":"$100-300","rating":4.4,"google_maps_url":"https://www.google.com/maps/search/東門文昌雞飯+新竹","address":"新竹市東門城圓環","review_url":"https://ifoodie.tw/","source":"愛食記","description":"新竹白斬雞飯，油蔥香氣十足"},
+  {"name":"皇泰火鍋城","cuisine":"火鍋","audience":"家庭聚餐、朋友聚會","region":"北部","city":"宜蘭縣","district":"礁溪鄉","price_range":"$300-600","rating":4.5,"google_maps_url":"https://www.google.com/maps/search/皇泰火鍋城+宜蘭礁溪","address":"宜蘭縣礁溪","review_url":"https://ifoodie.tw/","source":"愛食記","description":"火鍋烤串海鮮任你吃，溫泉小鎮美食"},
+  {"name":"松薇甜點","cuisine":"甜點","audience":"約會、下午茶","region":"北部","city":"台北市","district":"大安區","price_range":"$100-300","rating":4.5,"google_maps_url":"https://www.google.com/maps/search/松薇+PINE+ROSE+台北","address":"台北市大安區永康商圈","review_url":"https://ifoodie.tw/","source":"愛食記","description":"質感網美甜點店，日式洋果子"},
+  // 中部
+  {"name":"日船章魚丸","cuisine":"日式小吃","audience":"朋友聚會、觀光客","region":"中部","city":"台中市","district":"西屯區","price_range":"$100以下","rating":4.4,"google_maps_url":"https://www.google.com/maps/search/日船章魚丸+台中逢甲","address":"台中市西屯區文華路13號","review_url":"https://niniandblue.com/blog/post/211249342","source":"Nini and Blue","description":"逢甲夜市經典日式章魚丸"},
+  {"name":"官芝霖大腸包小腸","cuisine":"台灣小吃","audience":"朋友聚會、觀光客、學生族群","region":"中部","city":"台中市","district":"西屯區","price_range":"$100以下","rating":4.3,"google_maps_url":"https://www.google.com/maps/search/官芝霖大腸包小腸+逢甲","address":"台中市西屯區逢甲夜市","review_url":"https://foodieteller.com/fengjia-night-market/","source":"Foodie Teller","description":"逢甲夜市經典，大腸包小腸發源地"},
+  {"name":"成真咖啡","cuisine":"咖啡","audience":"情侶約會、朋友聚會","region":"中部","city":"台中市","district":"西區","price_range":"$100-300","rating":4.5,"google_maps_url":"https://www.google.com/maps/search/成真咖啡+台中審計新村","address":"台中市西區審計新村周邊","review_url":"https://www.welcometw.com/","source":"好好玩FUNIT","description":"審計新村創意咖啡，舒芙蕾厚鬆餅"},
+  {"name":"Forchetta","cuisine":"義式","audience":"商務宴客、情侶約會","region":"中部","city":"台中市","district":"西屯區","price_range":"$1000以上","rating":4.6,"google_maps_url":"https://www.google.com/maps/search/Forchetta+台中","address":"台中市西屯區七期","review_url":"https://guide.michelin.com/tw/","source":"米其林指南","description":"台中七期米其林一星法式料理餐廳"},
+  {"name":"茶六燒肉堂","cuisine":"日式燒肉","audience":"商務宴客、家庭聚餐","region":"中部","city":"台中市","district":"西屯區","price_range":"$600-1000","rating":4.4,"google_maps_url":"https://www.google.com/maps/search/茶六燒肉堂+台中","address":"台中市西屯區朝富路","review_url":"https://tw.trip.com/","source":"Trip.com","description":"輕井澤跨足燒肉，大量木頭禪風設計"},
+  {"name":"東海蓮心冰雞爪凍","cuisine":"冷滷味","audience":"朋友聚會、觀光客","region":"中部","city":"台中市","district":"龍井區","price_range":"$100-300","rating":4.5,"google_maps_url":"https://www.google.com/maps/search/東海蓮心冰雞爪凍","address":"台中市龍井區東海商圈","review_url":"https://www.welcometw.com/","source":"好好玩FUNIT","description":"東海夜市必吃，獨家秘方醬油雞爪"},
+  {"name":"東海刈包大王","cuisine":"台灣小吃","audience":"學生族群、朋友聚會","region":"中部","city":"台中市","district":"龍井區","price_range":"$100以下","rating":4.3,"google_maps_url":"https://www.google.com/maps/search/東海刈包大王","address":"台中市龍井區東海夜市","review_url":"https://yiwutrip.tw/tung-hai-night-market/","source":"一務旅遊","description":"東海必吃平價美食，雞腿排與五花肉"},
+  {"name":"柚一鍋","cuisine":"火鍋","audience":"家庭聚餐、朋友聚會","region":"中部","city":"台中市","district":"南屯區","price_range":"$100-300","rating":4.4,"google_maps_url":"https://www.google.com/maps/search/柚一鍋+台中南屯","address":"台中市南屯區大墩路","review_url":"https://www.welcometw.com/","source":"好好玩FUNIT","description":"百元起平價火鍋，甜點冰品自助吧"},
+  {"name":"發爐火鍋","cuisine":"火鍋","audience":"家庭聚餐、朋友聚會","region":"中部","city":"台中市","district":"南屯區","price_range":"$300-600","rating":4.3,"google_maps_url":"https://www.google.com/maps/search/發爐火鍋+台中","address":"台中市南屯區永春路","review_url":"https://ajunfun.tw/falu-hot-pot/","source":"阿君的玩食天堂","description":"爆香石頭火鍋，湯頭濃郁甘甜"},
+  {"name":"宮小籠湯包","cuisine":"上海小籠包","audience":"早餐用餐、家庭聚餐","region":"中部","city":"台中市","district":"烏日區","price_range":"$100-300","rating":4.5,"google_maps_url":"https://www.google.com/maps/search/宮小籠湯包+台中烏日","address":"台中市烏日區三民街","review_url":"https://fruitlovelife.com/","source":"果果愛Fruitlove","description":"台中最好吃爆蔥小籠包，早上六點排隊"},
+  {"name":"川香館","cuisine":"川菜","audience":"商務宴客、家庭聚餐","region":"中部","city":"台中市","district":"北屯區","price_range":"$300-600","rating":4.3,"google_maps_url":"https://www.google.com/maps/search/川香館+台中北屯","address":"台中市北屯區東山路大坑","review_url":"https://ritafoodie.pixnet.net/","source":"吃貨日日美食","description":"大坑附近聚餐好選擇"},
+  {"name":"福味香小館","cuisine":"川菜","audience":"朋友聚會、美食家","region":"中部","city":"台中市","district":"北屯區","price_range":"$300-600","rating":4.5,"google_maps_url":"https://www.google.com/maps/search/福味香小館+台中","address":"台中市北屯區興安路一段86號","review_url":"https://bobotravel.tw/blog/post/fu-wei-xiang","source":"寶兒遊樂園","description":"藏身民宅裡的美味料理，Google高評"},
+  {"name":"日月餐坊","cuisine":"邵族風味料理","audience":"家庭聚餐、觀光客","region":"中部","city":"南投縣","district":"魚池鄉","price_range":"$300-600","rating":4.4,"google_maps_url":"https://www.google.com/maps/search/日月餐坊+日月潭","address":"南投縣魚池鄉日月潭伊達邵","review_url":"https://tw.trip.com/blog/sunmoonlake-food/","source":"Trip.com","description":"超熱門餐廳，總統魚與竹筒飯必點"},
+  {"name":"眺Tiao日月潭","cuisine":"咖啡","audience":"情侶約會、朋友聚會","region":"中部","city":"南投縣","district":"魚池鄉","price_range":"$100-300","rating":4.4,"google_maps_url":"https://www.google.com/maps/search/眺Tiao+日月潭","address":"南投縣魚池鄉水社碼頭","review_url":"https://www.welcometw.com/","source":"好好玩FUNIT","description":"日月潭景觀咖啡，下午茶好去處"},
+  {"name":"龍來小館","cuisine":"客家料理","audience":"家庭聚餐、商務宴客","region":"中部","city":"苗栗縣","district":"頭份市","price_range":"$300-600","rating":4.3,"google_maps_url":"https://www.google.com/maps/search/龍來小館+苗栗頭份","address":"苗栗縣頭份市建國路二段135號","review_url":"https://www.welcometw.com/","source":"好好玩FUNIT","description":"融合傳統客家與創新料理"},
+  {"name":"麵容餃好","cuisine":"客家料理","audience":"朋友聚會、家庭聚餐","region":"中部","city":"苗栗縣","district":"竹南鎮","price_range":"$100-300","rating":4.4,"google_maps_url":"https://www.google.com/maps/search/麵容餃好+苗栗竹南","address":"苗栗縣竹南鎮博愛街177號","review_url":"https://www.bella.tw/","source":"Bella.tw儂儂","description":"苗栗最美麵店，復古文青風"},
+  {"name":"老街碗粿","cuisine":"台灣小吃","audience":"上班族、學生族群","region":"中部","city":"雲林縣","district":"斗六市","price_range":"$100以下","rating":4.2,"google_maps_url":"https://www.google.com/maps/search/老街碗粿+斗六太平老街","address":"雲林縣斗六市太平老街","review_url":"https://www.klook.com/zh-TW/blog/yunlin-douliu-food/","source":"Klook客路","description":"斗六太平老街最有名古早味"},
+  {"name":"正宗員林肉圓","cuisine":"台灣小吃","audience":"上班族、家庭聚餐","region":"中部","city":"彰化縣","district":"員林市","price_range":"$100以下","rating":4.4,"google_maps_url":"https://www.google.com/maps/search/正宗員林肉圓","address":"彰化縣員林市","review_url":"https://shin.tw/changhua-yuanlin-meatball/","source":"真心食譜","description":"百年老店，外皮Q彈內餡紮實"},
+  {"name":"漢彬水晶餃","cuisine":"台灣小吃","audience":"家庭聚餐、觀光客","region":"中部","city":"彰化縣","district":"鹿港鎮","price_range":"$100以下","rating":4.3,"google_maps_url":"https://www.google.com/maps/search/漢彬水晶餃+鹿港","address":"彰化縣鹿港鎮老街","review_url":"https://2hyperlife.com/lugangfood/","source":"強生與小吠","description":"清光緒十年創立，140年歷史手工丸餃"},
+  {"name":"埔里一碗食舖","cuisine":"蔬食","audience":"素食者、健康飲食","region":"中部","city":"南投縣","district":"埔里鎮","price_range":"$300-600","rating":4.4,"google_maps_url":"https://www.google.com/maps/search/埔里一碗食舖","address":"南投縣埔里鎮","review_url":"https://gofunit.com/","source":"好好玩FUNIT","description":"全植物民家料理，一週只開四天"},
+  {"name":"德利麵食館","cuisine":"台灣麵食","audience":"上班族、家庭聚餐","region":"中部","city":"台中市","district":"中區","price_range":"$100-300","rating":4.2,"google_maps_url":"https://www.google.com/maps/search/德利麵食館+台中繼光街","address":"台中市中區繼光街129號","review_url":"https://supertaste.tvbs.com.tw/pack/348872","source":"食尚玩家","description":"30年老店，手工麵條紅燒牛肉麵"},
+  {"name":"虎尾糖廠冰品部","cuisine":"冰品","audience":"家庭聚餐、觀光客","region":"中部","city":"雲林縣","district":"虎尾鎮","price_range":"$100以下","rating":4.4,"google_maps_url":"https://www.google.com/maps/search/虎尾糖廠冰品部","address":"雲林縣虎尾鎮糖廠內","review_url":"https://supertaste.tvbs.com.tw/pack/351569","source":"食尚玩家","description":"虎尾糖廠平價冰品，真材實料"},
+  // 南部
+  {"name":"六千牛肉湯","cuisine":"台南小吃","audience":"上班族、觀光客","region":"南部","city":"台南市","district":"中西區","price_range":"$100-300","rating":4.6,"google_maps_url":"https://www.google.com/maps/search/六千牛肉湯+台南","address":"台南市中西區海安路一段63號","review_url":"https://tisshuang.com/blog/post/tainanfoods","source":"TISS玩味食尚","description":"台南必吃溫體牛肉湯，凌晨排隊名店"},
+  {"name":"度小月擔仔麵","cuisine":"台南小吃","audience":"觀光客、家庭聚餐","region":"南部","city":"台南市","district":"中西區","price_range":"$100以下","rating":4.3,"google_maps_url":"https://www.google.com/maps/search/度小月擔仔麵+台南","address":"台南市中西區中正路16號","review_url":"https://guide.michelin.com/tw/","source":"米其林必比登","description":"百年老店，台南擔仔麵始祖"},
+  {"name":"阿堂鹹粥","cuisine":"台南小吃","audience":"上班族、觀光客","region":"南部","city":"台南市","district":"中西區","price_range":"$100-300","rating":4.4,"google_maps_url":"https://www.google.com/maps/search/阿堂鹹粥+台南","address":"台南市中西區西門路一段728號","review_url":"https://margaret.tw/tainan-bib-gourmand/","source":"Margaret美食札記","description":"台南必比登推薦，虱目魚鹹粥經典"},
+  {"name":"矮仔成蝦仁飯","cuisine":"台南小吃","audience":"上班族、觀光客","region":"南部","city":"台南市","district":"中西區","price_range":"$100以下","rating":4.5,"google_maps_url":"https://www.google.com/maps/search/矮仔成蝦仁飯+台南","address":"台南市中西區海安路一段66號","review_url":"https://guide.michelin.com/tw/","source":"米其林必比登","description":"蝦仁飯代表店家，鴨蛋加持"},
+  {"name":"邱家小捲米粉","cuisine":"台南小吃","audience":"上班族、觀光客","region":"南部","city":"台南市","district":"中西區","price_range":"$100以下","rating":4.5,"google_maps_url":"https://www.google.com/maps/search/邱家小捲米粉+台南國華街","address":"台南市中西區國華街三段5號","review_url":"https://www.funliday.com/posts/tainan_guohuast_best20/","source":"Funliday","description":"國華街排隊美食，小捲Q彈米粉入味"},
+  {"name":"阿松割包","cuisine":"台南小吃","audience":"上班族、觀光客","region":"南部","city":"台南市","district":"中西區","price_range":"$100以下","rating":4.4,"google_maps_url":"https://www.google.com/maps/search/阿松割包+台南國華街","address":"台南市中西區國華街三段181號","review_url":"https://www.funliday.com/posts/tainan_guohuast_best20/","source":"Funliday","description":"豬舌包古早味，國華街必吃"},
+  {"name":"阿美飯店","cuisine":"台南小吃","audience":"家庭聚餐、觀光客","region":"南部","city":"台南市","district":"中西區","price_range":"$300-600","rating":4.3,"google_maps_url":"https://www.google.com/maps/search/阿美飯店+台南","address":"台南市中西區民權路","review_url":"https://guide.michelin.com/tw/","source":"米其林必比登","description":"經典台南辦桌菜，砂鍋鴨必點"},
+  {"name":"同記安平豆花","cuisine":"甜品","audience":"觀光客、家庭聚餐","region":"南部","city":"台南市","district":"安平區","price_range":"$100以下","rating":4.4,"google_maps_url":"https://www.google.com/maps/search/同記安平豆花","address":"台南市安平區安北路433號","review_url":"https://www.kkday.com/zh-tw/blog/220141/","source":"KKday","description":"安平老街必吃，竹炭豆花招牌"},
+  {"name":"文章牛肉湯","cuisine":"台南小吃","audience":"上班族、觀光客","region":"南部","city":"台南市","district":"安平區","price_range":"$100-300","rating":4.5,"google_maps_url":"https://www.google.com/maps/search/文章牛肉湯+台南安平","address":"台南市安平區安平路590號","review_url":"https://tisshuang.com/blog/post/tainanfoods","source":"TISS玩味食尚","description":"安平區溫體牛肉湯名店"},
+  {"name":"筑馨居","cuisine":"台南辦桌菜","audience":"商務宴客、家庭聚餐","region":"南部","city":"台南市","district":"中西區","price_range":"$600-1000","rating":4.6,"google_maps_url":"https://www.google.com/maps/search/筑馨居+台南","address":"台南市中西區","review_url":"https://guide.michelin.com/tw/","source":"米其林推薦","description":"百年老宅私房菜，全預約制"},
+  {"name":"PLAN B 歐陸街頭市集","cuisine":"歐式","audience":"朋友聚會、約會","region":"南部","city":"台南市","district":"中西區","price_range":"$300-600","rating":4.3,"google_maps_url":"https://www.google.com/maps/search/PLAN+B+台南","address":"台南市中西區正興街","review_url":"https://ifoodie.tw/","source":"愛食記","description":"正興街人氣餐酒館，歐式小食"},
+  {"name":"瑞豐夜市","cuisine":"小吃","audience":"朋友聚會、觀光客、學生族群","region":"南部","city":"高雄市","district":"左營區","price_range":"$100以下","rating":4.3,"google_maps_url":"https://www.google.com/maps/search/瑞豐夜市+高雄","address":"高雄市左營區裕誠路","review_url":"https://gofunit.com/","source":"好好玩FUNIT","description":"高雄最大夜市，上千攤位美食天堂"},
+  {"name":"六合夜市","cuisine":"小吃","audience":"觀光客、朋友聚會","region":"南部","city":"高雄市","district":"新興區","price_range":"$100以下","rating":4.1,"google_maps_url":"https://www.google.com/maps/search/六合夜市+高雄","address":"高雄市新興區六合二路","review_url":"https://www.klook.com/zh-TW/blog/","source":"Klook客路","description":"高雄歷史最悠久觀光夜市"},
+  {"name":"旗津海產街","cuisine":"海鮮","audience":"家庭聚餐、觀光客","region":"南部","city":"高雄市","district":"旗津區","price_range":"$300-600","rating":4.3,"google_maps_url":"https://www.google.com/maps/search/旗津海產街+高雄","address":"高雄市旗津區廟前路","review_url":"https://nellydyu.tw/blog/post/gushanfishmarket","source":"跟著尼力吃喝玩樂","description":"搭渡輪吃海產，現撈仔平價大碗"},
+  {"name":"鼓山渡輪站魚市場","cuisine":"海鮮","audience":"家庭聚餐、美食愛好者","region":"南部","city":"高雄市","district":"鼓山區","price_range":"$100-300","rating":4.2,"google_maps_url":"https://www.google.com/maps/search/鼓山魚市場+高雄","address":"高雄市鼓山區渡船頭","review_url":"https://nellydyu.tw/","source":"跟著尼力吃喝玩樂","description":"碼頭旁現撈海鮮，在地人買魚聖地"},
+  {"name":"劉家酸菜白肉鍋","cuisine":"火鍋","audience":"家庭聚餐、朋友聚會","region":"南部","city":"高雄市","district":"左營區","price_range":"$300-600","rating":4.4,"google_maps_url":"https://www.google.com/maps/search/劉家酸菜白肉鍋+高雄","address":"高雄市左營區","review_url":"https://ifoodie.tw/","source":"愛食記","description":"酸菜白肉鍋南部霸主，蓮池潭旁"},
+  {"name":"碳佐麻里","cuisine":"日式燒肉","audience":"約會、商務宴客","region":"南部","city":"高雄市","district":"前鎮區","price_range":"$600-1000","rating":4.5,"google_maps_url":"https://www.google.com/maps/search/碳佐麻里+高雄","address":"高雄市前鎮區","review_url":"https://ifoodie.tw/","source":"愛食記","description":"南台灣燒肉龍頭，日式精品風格"},
+  {"name":"港園牛肉麵","cuisine":"牛肉麵","audience":"上班族、觀光客","region":"南部","city":"高雄市","district":"鹽埕區","price_range":"$100-300","rating":4.4,"google_maps_url":"https://www.google.com/maps/search/港園牛肉麵+高雄","address":"高雄市鹽埕區大成街55號","review_url":"https://bobbyfun.tw/","source":"波比看世界","description":"駁二附近60年老店，清燉牛肉麵必吃"},
+  {"name":"林聰明沙鍋魚頭","cuisine":"台菜","audience":"觀光客、家庭聚餐","region":"南部","city":"嘉義市","district":"東區","price_range":"$100-300","rating":4.4,"google_maps_url":"https://www.google.com/maps/search/林聰明沙鍋魚頭+嘉義","address":"嘉義市東區中正路361號","review_url":"https://guide.michelin.com/tw/","source":"米其林必比登","description":"嘉義必比登推薦，沙鍋魚頭招牌"},
+  {"name":"噴水雞肉飯","cuisine":"雞肉飯","audience":"上班族、觀光客","region":"南部","city":"嘉義市","district":"西區","price_range":"$100以下","rating":4.2,"google_maps_url":"https://www.google.com/maps/search/噴水雞肉飯+嘉義","address":"嘉義市西區中山路325號","review_url":"https://ifoodie.tw/","source":"愛食記","description":"嘉義雞肉飯代表，噴水圓環旁老店"},
+  {"name":"文化路夜市","cuisine":"小吃","audience":"觀光客、朋友聚會、學生族群","region":"南部","city":"嘉義市","district":"東區","price_range":"$100以下","rating":4.3,"google_maps_url":"https://www.google.com/maps/search/嘉義文化路夜市","address":"嘉義市東區文化路","review_url":"https://travel.yam.com/article/135654","source":"輕旅行","description":"嘉義最熱鬧夜市，雞肉飯聚集地"},
+  {"name":"萬巒豬腳街","cuisine":"豬腳","audience":"觀光客、家庭聚餐","region":"南部","city":"屏東縣","district":"萬巒鄉","price_range":"$100-300","rating":4.3,"google_maps_url":"https://www.google.com/maps/search/萬巒豬腳+屏東","address":"屏東縣萬巒鄉民和路","review_url":"https://travel.ettoday.net/","source":"ETtoday旅遊雲","description":"全台最知名豬腳街，Q彈滷豬腳"},
+  {"name":"東港華僑市場","cuisine":"海鮮","audience":"家庭聚餐、美食愛好者","region":"南部","city":"屏東縣","district":"東港鎮","price_range":"$300-600","rating":4.4,"google_maps_url":"https://www.google.com/maps/search/東港華僑市場","address":"屏東縣東港鎮朝隆路","review_url":"https://travel.ettoday.net/","source":"ETtoday旅遊雲","description":"東港黑鮪魚季聖地，現撈海鮮代客料理"},
+  // 東部
+  {"name":"慕名私房料理","cuisine":"原住民風味","audience":"美食愛好者、家庭聚餐","region":"東部","city":"花蓮縣","district":"新城鄉","price_range":"$600-1000","rating":4.3,"google_maps_url":"https://www.google.com/maps/search/慕名私房料理+花蓮","address":"花蓮縣新城鄉明潭街10巷23號","review_url":"https://www.bigfang.tw/blog/post/muming-hualien","source":"樂活的大方","description":"七星潭超人氣無菜單原住民料理"},
+  {"name":"龍哥斯特","cuisine":"海鮮","audience":"家庭聚餐、情侶約會","region":"東部","city":"花蓮縣","district":"吉安鄉","price_range":"$600-1000","rating":4.4,"google_maps_url":"https://www.google.com/maps/search/龍哥斯特+花蓮","address":"花蓮縣吉安鄉中央路三段458號","review_url":"https://dalang.tw/hllangouste/","source":"愛食記","description":"花蓮人氣海鮮餐廳，嚴選活龍蝦"},
+  {"name":"公正包子","cuisine":"小吃","audience":"上班族、觀光客","region":"東部","city":"花蓮縣","district":"花蓮市","price_range":"$100以下","rating":4.5,"google_maps_url":"https://www.google.com/maps/search/公正包子+花蓮","address":"花蓮縣花蓮市仁愛街46號","review_url":"https://www.bigfang.tw/","source":"PTT、在地推薦","description":"花蓮必吃老字號，皮薄餡多排隊名店"},
+  {"name":"炸彈蔥油餅","cuisine":"小吃","audience":"上班族、觀光客","region":"東部","city":"花蓮縣","district":"花蓮市","price_range":"$100以下","rating":4.6,"google_maps_url":"https://www.google.com/maps/search/炸彈蔥油餅+花蓮","address":"花蓮市復興街102號","review_url":"https://www.bigfang.tw/","source":"在地推薦","description":"蔥油餅外脆內軟，爆漿炸蛋必點"},
+  {"name":"液香扁食","cuisine":"傳統小吃","audience":"上班族、在地人","region":"東部","city":"花蓮縣","district":"花蓮市","price_range":"$100以下","rating":4.4,"google_maps_url":"https://www.google.com/maps/search/液香扁食+花蓮","address":"花蓮縣花蓮市信義街42號","review_url":"https://www.bigfang.tw/","source":"Google Maps","description":"70年老店，扁食皮薄餡大，在地經典"},
+  {"name":"伊娜的部落廚房","cuisine":"原住民風味","audience":"美食愛好者、家庭聚餐","region":"東部","city":"花蓮縣","district":"壽豐鄉","price_range":"$300-600","rating":4.6,"google_maps_url":"https://www.google.com/maps/search/伊娜的部落廚房+花蓮","address":"花蓮縣壽豐鄉鹽寮村鹽寮37號","review_url":"https://plumpyblog.com/yina-kitchen/","source":"愛食記","description":"阿美族風味家常菜，情人的眼淚"},
+  {"name":"池上飯包文化故事館","cuisine":"便當","audience":"觀光客、上班族","region":"東部","city":"台東縣","district":"池上鄉","price_range":"$100-300","rating":4.4,"google_maps_url":"https://www.google.com/maps/search/池上飯包文化故事館","address":"台東縣池上鄉忠孝路259號","review_url":"https://www.zztaitung.com/","source":"台東製造","description":"悟饕池上飯包，懷舊台鐵便當體驗"},
+  {"name":"全美行池上便當","cuisine":"便當","audience":"火車旅客、上班族","region":"東部","city":"台東縣","district":"池上鄉","price_range":"$100以下","rating":4.3,"google_maps_url":"https://www.google.com/maps/search/全美行池上便當","address":"台東縣池上鄉火車站前","review_url":"https://niniyeh.com/","source":"部落格推薦","description":"懷舊月台便當，無限湯品，當地人首選"},
+  {"name":"關山便當","cuisine":"便當","audience":"火車旅客、上班族","region":"東部","city":"台東縣","district":"關山鎮","price_range":"$100以下","rating":4.5,"google_maps_url":"https://www.google.com/maps/search/關山便當+台東","address":"台東縣關山鎮和平路83號","review_url":"https://journey.tw/guanshan-lunchbox/","source":"許傑旅行圖中","description":"40年老店，米飯軟滑涼掉依舊好吃"},
+  {"name":"原始部落","cuisine":"原住民風味","audience":"家庭聚餐、情侶約會","region":"東部","city":"台東縣","district":"卑南鄉","price_range":"$300-600","rating":4.5,"google_maps_url":"https://www.google.com/maps/search/原始部落+台東","address":"台東縣卑南鄉利嘉村","review_url":"https://tenjo.tw/taitungtribe/","source":"食尚玩家","description":"台東景觀餐廳人氣王，桶烤雞招牌"},
+  {"name":"鐵花小路","cuisine":"日式","audience":"上班族、觀光客","region":"東部","city":"台東縣","district":"台東市","price_range":"$100-300","rating":4.2,"google_maps_url":"https://www.google.com/maps/search/鐵花小路+台東","address":"台東鐵花村旁","review_url":"https://www.zztaitung.com/","source":"台東製造","description":"日式豬排專賣，鐵花村商圈必吃"},
+  {"name":"溫度釀製所","cuisine":"餐酒館","audience":"上班族、朋友聚會","region":"東部","city":"台東縣","district":"台東市","price_range":"$300-600","rating":4.4,"google_maps_url":"https://www.google.com/maps/search/溫度釀製所+台東","address":"台東故事館旁","review_url":"https://cc2kitchen.com/temperaturebrewery/","source":"美食部落格","description":"營業到深夜，調酒與餐點水準高"},
+  {"name":"055龍蝦海鮮餐廳","cuisine":"海鮮","audience":"家庭聚餐","region":"東部","city":"花蓮縣","district":"壽豐鄉","price_range":"$300-600","rating":4.5,"google_maps_url":"https://www.google.com/maps/search/055龍蝦海鮮餐廳+花蓮","address":"花蓮縣壽豐鄉132號","review_url":"https://www.bigfang.tw/","source":"樂活的大方","description":"鹽寮濱海海鮮餐廳，明碼標價活龍蝦"},
+  // 離島
+  {"name":"永春廣東粥","cuisine":"粵菜","audience":"早餐族、上班族","region":"離島","city":"金門縣","district":"金城鎮","price_range":"$100以下","rating":4.3,"google_maps_url":"https://www.google.com/maps/search/永春廣東粥+金門","address":"金門縣金城鎮","review_url":"https://www.welcometw.com/","source":"金門觀光資訊","description":"1930年創立，金門必吃粵粥"},
+  {"name":"良金牧場","cuisine":"牛肉料理","audience":"觀光客、美食愛好者","region":"離島","city":"金門縣","district":"金城鎮","price_range":"$300-600","rating":4.5,"google_maps_url":"https://www.google.com/maps/search/良金牧場+金門","address":"金門縣金城鎮","review_url":"https://bobotravel.tw/","source":"寶兒遊樂園","description":"高粱酒糟放牧牛，金門牛肉乾推薦"},
+  {"name":"蚵嗲之家","cuisine":"海鮮小吃","audience":"上班族、觀光客","region":"離島","city":"金門縣","district":"金城鎮","price_range":"$100以下","rating":4.2,"google_maps_url":"https://www.google.com/maps/search/蚵嗲之家+金門","address":"金門縣金城鎮貞節牌坊前","review_url":"https://www.welcometw.com/","source":"金門觀光資訊","description":"40年老店，酥炸蚵嗲，金門野生石蚵"},
+  {"name":"馬祖老酒麵線","cuisine":"閩菜","audience":"上班族、觀光客","region":"離島","city":"連江縣","district":"南竿鄉","price_range":"$100以下","rating":4.3,"google_maps_url":"https://www.google.com/maps/search/馬祖老酒麵線+南竿","address":"連江縣南竿鄉","review_url":"https://www.matsu-nsa.gov.tw/","source":"馬祖國家風景區","description":"馬祖必嚐經典，老酒浸麵線補身好物"},
+  {"name":"阿婆手作魚麵","cuisine":"閩菜","audience":"上班族、觀光客","region":"離島","city":"連江縣","district":"馬祖","price_range":"$100-300","rating":4.4,"google_maps_url":"https://www.google.com/maps/search/阿婆手作魚麵+馬祖","address":"連江縣馬祖","review_url":"https://travel.ettoday.net/","source":"ETtoday旅遊雲","description":"一甲子手工魚麵，12道工法傳統美食"},
+  {"name":"京典粵菜海鮮館","cuisine":"粵菜","audience":"家庭聚餐、聚餐","region":"離島","city":"澎湖縣","district":"馬公市","price_range":"$300-600","rating":4.4,"google_maps_url":"https://www.google.com/maps/search/京典粵菜海鮮館+澎湖","address":"澎湖縣馬公市臨海路1-2號","review_url":"https://monicaleecat.pixnet.net/","source":"部落格推薦","description":"粵菜特色料理，澎湖野生龍蝦"},
+  {"name":"日新餐廳","cuisine":"海鮮","audience":"家庭聚餐、聚餐","region":"離島","city":"澎湖縣","district":"馬公市","price_range":"$300-600","rating":4.5,"google_maps_url":"https://www.google.com/maps/search/日新餐廳+澎湖","address":"澎湖縣馬公市","review_url":"https://shin.tw/penghu-jih-hsin/","source":"美食部落格","description":"澎湖人氣熱炒，新鮮海產平價好吃"},
+  {"name":"龍門海鮮","cuisine":"海鮮","audience":"家庭聚餐、聚餐","region":"離島","city":"澎湖縣","district":"湖西鄉","price_range":"$300-600","rating":4.3,"google_maps_url":"https://www.google.com/maps/search/龍門海鮮+澎湖","address":"澎湖縣湖西鄉龍門村58-2號","review_url":"https://travel.yam.com/","source":"Yam旅遊","description":"水晶小管必點，新鮮海鮮澎湖代表"},
+  {"name":"阿東飛魚刈包","cuisine":"飛魚料理","audience":"觀光客、美食愛好者","region":"離島","city":"台東縣","district":"蘭嶼","price_range":"$100-300","rating":4.4,"google_maps_url":"https://www.google.com/maps/search/阿東飛魚刈包+蘭嶼","address":"蘭嶼開元港","review_url":"https://journey.tw/lanyu-food/","source":"許傑旅行圖中","description":"蘭嶼飛魚季必吃，刈包結合台灣風味"},
+  {"name":"漂流木餐廳","cuisine":"飛魚料理","audience":"觀光客、美食愛好者","region":"離島","city":"台東縣","district":"蘭嶼","price_range":"$100-300","rating":4.5,"google_maps_url":"https://www.google.com/maps/search/漂流木餐廳+蘭嶼","address":"蘭嶼漁人村","review_url":"https://springhappylife.tw/","source":"美食部落格","description":"奶油飛魚卵燉飯招牌，靠近機場"},
+  {"name":"菲哥海洋美食","cuisine":"綠島特色料理","audience":"觀光客、上班族","region":"離島","city":"台東縣","district":"綠島","price_range":"$100-300","rating":4.3,"google_maps_url":"https://www.google.com/maps/search/菲哥海洋美食+綠島","address":"綠島大街","review_url":"https://udn.com/","source":"聯合新聞網","description":"綠島道地風味，炸飛魚與炒鹿肉"},
+  {"name":"綠島小叮噹海草冰","cuisine":"冰品","audience":"觀光客、全年齡","region":"離島","city":"台東縣","district":"綠島","price_range":"$100以下","rating":4.4,"google_maps_url":"https://www.google.com/maps/search/綠島小叮噹海草冰","address":"綠島大街","review_url":"https://findlife.com.tw/","source":"MENU美食誌","description":"黑糖海草冰，貝殼冰碗，綠島限定"}
+];
+
+const platforms = [
+  {"name":"愛食記 iFoodie","type":"美食平台","url":"https://ifoodie.tw/","coverage":"全台灣 3000+ 餐廳","features":"美食評論、餐廳訂位、優惠券、社群評分","description":"台灣最大美食App，300萬用戶即時更新評論"},
+  {"name":"窩客島 WalkerLand","type":"美食平台","url":"https://www.walkerland.com.tw/","coverage":"全台灣各縣市","features":"美食評論、旅遊推薦、優惠資訊","description":"台灣角川美食旅遊新聞平台，每日更新"},
+  {"name":"OpenRice 開飯喇","type":"美食平台","url":"https://tw.openrice.com/","coverage":"全亞洲餐廳","features":"跨國訂位、評論、優惠券、多語言","description":"亞洲850萬月活用戶，整合18家訂位系統"},
+  {"name":"EZTABLE 簡單桌","type":"美食訂位平台","url":"https://eztable.com/","coverage":"全台灣 1000+ 餐廳","features":"線上訂位、優惠券、餐廳資訊","description":"11年訂位服務，24小時線上預約"},
+  {"name":"食尚玩家","type":"美食節目與平台","url":"https://supertaste.tvbs.com.tw/","coverage":"全台灣 25000+ 店家","features":"節目推薦、達人評鑑、優惠資訊","description":"TVBS美食旅遊第一品牌，每日200則優惠"},
+  {"name":"500碗","type":"美食評鑑","url":"https://500times.udn.com/","coverage":"全台灣 462 間小吃","features":"在地觀點評選、美食排行","description":"第三屆全台小吃新指南，50位跨界評審"},
+  {"name":"米其林指南台灣","type":"美食評鑑","url":"https://guide.michelin.com/tw/","coverage":"台灣 419 間入選餐廳","features":"星級評鑑、餐廳排行、專業評論","description":"2025年60家摘星餐廳，國際美食權威"},
+  {"name":"亞洲50最佳餐廳","type":"美食評鑑","url":"https://www.theworlds50best.com/asia/en/list/1-50","coverage":"亞洲17城市","features":"國際排行、頂級餐廳推薦","description":"Logy與JL Studio進入前50名"},
+  {"name":"Dcard 美食板","type":"社群推薦","url":"https://www.dcard.tw/f/food","coverage":"全台灣網友推薦","features":"匿名討論、即時評論、隱藏美食","description":"150萬粉絲，年輕人最活躍美食社群"},
+  {"name":"PTT 美食版","type":"社群推薦","url":"https://www.ptt.cc/bbs/Food/index.html","coverage":"全台灣在地推薦","features":"老饕評論、隱藏版美食、專業討論","description":"台灣最老牌論壇，工作族美食討論區"},
+  {"name":"inline 訂位","type":"美食訂位平台","url":"https://inline.app/","coverage":"全台灣熱門餐廳","features":"線上訂位、候位通知","description":"熱門餐廳指定訂位系統"},
+  {"name":"Eatgether","type":"社交餐飲平台","url":"https://eatgether.com/","coverage":"全台灣","features":"揪團聚餐、美食社交、活動","description":"美食社交平台，認識新朋友一起吃飯"}
+];
+
+const bloggers = [
+  {"name":"千千進食中","platform":"YouTube","subscribers":"100萬+","specialty":"泰式美食、台灣小吃、食品評測","description":"泰台混血創作者，前護士，創辦水喔千拌麵"},
+  {"name":"古娃娃 WaWa","platform":"YouTube","subscribers":"90萬+","specialty":"便利超商新品、美食開箱、甜點","description":"便利超商女神，創辦WA!COOKIES與WA!BAKERY"},
+  {"name":"Joeman","platform":"YouTube","subscribers":"250萬+","specialty":"3C產品、美食評測、便利商店","description":"知名科技部落客，與7-Eleven聯名推出美食"},
+  {"name":"Mark Wiens","platform":"YouTube","subscribers":"1000萬+","specialty":"台灣美食、世界旅遊美食、街邊小吃","description":"美國美食旅遊頻道，多次來台拍攝推薦"},
+  {"name":"食尚玩家達人","platform":"TVBS 節目與App","subscribers":"百萬+ App用戶","specialty":"全台餐廳評選、美食懶人包","description":"官方駐站部落客，專業餐廳推薦"},
+  {"name":"樂活的大方","platform":"部落格","subscribers":"高流量","specialty":"台北美食、花蓮美食、旅遊","description":"資深美食部落客，詳細圖文食記"},
+  {"name":"TISS 玩味食尚","platform":"部落格","subscribers":"高流量","specialty":"台南美食、親子旅遊","description":"詳細美食攻略，台南小吃專家"},
+  {"name":"波比看世界","platform":"部落格","subscribers":"高流量","specialty":"全台景點美食、旅遊攻略","description":"最佳旅遊美食懶人包整理"},
+  {"name":"Margaret 美食札記","platform":"部落格","subscribers":"資深","specialty":"台南美食、嘉義美食、文化旅遊","description":"深度在地美食書寫，文化觀察"}
+];
+
+/* ================================================================
+   STATE
+   ================================================================ */
+const regionColors = {north:'#2563EB',central:'#059669',south:'#DC2626',east:'#7C3AED',island:'#0891B2'};
+let filters = {region:[],cuisine:[],audience:[],price:[]};
+let search = '';
+let currentTab = 'restaurants';
+let currentView = 'list';
+let map = null;
+let markers = [];
+
+/* ================================================================
+   INIT
+   ================================================================ */
+function init(){
+  // build dynamic pills
+  const cuisines = [...new Set(restaurants.map(r=>r.cuisine))].sort();
+  const auds = new Set(); restaurants.forEach(r=>r.audience.split(/[、,]/).forEach(a=>auds.add(a.trim())));
+  buildPills('cuisinePills',cuisines,'cuisine');
+  buildPills('audiencePills',[...auds].sort(),'audience');
+
+  // events
+  document.querySelectorAll('.pill[data-f]').forEach(p=>p.addEventListener('click',()=>toggle(p)));
+  document.getElementById('searchInput').addEventListener('input',e=>{search=e.target.value.trim().toLowerCase();render();});
+  document.getElementById('sortSel').addEventListener('change',()=>render());
+  document.querySelectorAll('.tab-btn').forEach(t=>t.addEventListener('click',()=>{
+    document.querySelectorAll('.tab-btn').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active'); currentTab=t.dataset.tab; render();
+  }));
+  document.querySelectorAll('.view-btn').forEach(v=>v.addEventListener('click',()=>{
+    document.querySelectorAll('.view-btn').forEach(x=>x.classList.remove('active'));
+    v.classList.add('active'); currentView=v.dataset.view; render();
+  }));
+  updateStats(); render();
+}
+
+function buildPills(id,items,filterKey){
+  const c=document.getElementById(id);
+  items.forEach(v=>{const b=document.createElement('button');b.className='pill';b.dataset.f=filterKey;b.dataset.v=v;b.textContent=v;b.addEventListener('click',()=>toggle(b));c.appendChild(b);});
+}
+
+function toggle(btn){
+  const f=btn.dataset.f,v=btn.dataset.v;
+  btn.classList.toggle('on');
+  filters[f]=filters[f].includes(v)?filters[f].filter(x=>x!==v):[...filters[f],v];
+  render();
+}
+
+function clearAll(){
+  Object.keys(filters).forEach(k=>filters[k]=[]);
+  document.querySelectorAll('.pill.on').forEach(p=>p.classList.remove('on'));
+  document.getElementById('searchInput').value='';search='';render();
+}
+
+function rc(r){return{'\u5317\u90e8':'north','\u4e2d\u90e8':'central','\u5357\u90e8':'south','\u6771\u90e8':'east','\u96e2\u5cf6':'island'}[r]||'island';}
+function priceLevel(p){if(p.includes('\u4ee5\u4e0b'))return 1;if(p.includes('100-300'))return 2;if(p.includes('300-600'))return 3;if(p.includes('600-1000'))return 4;return 5;}
+
+function filtered(){
+  return restaurants.filter(r=>{
+    if(search){const s=search;if(![r.name,r.cuisine,r.audience,r.city,r.district,r.description,r.region,r.source].some(f=>f&&f.toLowerCase().includes(s)))return false;}
+    if(filters.region.length&&!filters.region.includes(r.region))return false;
+    if(filters.cuisine.length&&!filters.cuisine.includes(r.cuisine))return false;
+    if(filters.audience.length){const a=r.audience.split(/[、,]/).map(x=>x.trim());if(!filters.audience.some(x=>a.includes(x)))return false;}
+    if(filters.price.length&&!filters.price.includes(r.price_range))return false;
+    return true;
+  });
+}
+
+function sorted(list){
+  const s=document.getElementById('sortSel').value;
+  return[...list].sort((a,b)=>{
+    if(s==='name')return a.name.localeCompare(b.name,'zh-TW');
+    if(s==='rating-desc')return(b.rating||0)-(a.rating||0);
+    if(s==='price-asc')return priceLevel(a.price_range)-priceLevel(b.price_range);
+    if(s==='price-desc')return priceLevel(b.price_range)-priceLevel(a.price_range);
+    if(s==='region')return a.region.localeCompare(b.region);
+    return 0;
+  });
+}
+
+function updateStats(){
+  document.getElementById('statTotal').textContent=restaurants.length+' 間餐廳';
+  document.getElementById('statCuisine').textContent=new Set(restaurants.map(r=>r.cuisine)).size+' 種料理';
+}
+
+/* ================================================================
+   MAP
+   ================================================================ */
+function initMap(){
+  if(map)return;
+  map=L.map('mapView',{zoomControl:true,scrollWheelZoom:true}).setView([23.7,120.96],7.5);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{
+    attribution:'&copy; <a href="https://carto.com/">CARTO</a>',maxZoom:18
+  }).addTo(map);
+}
+
+function updateMapMarkers(data){
+  markers.forEach(m=>map.removeLayer(m));markers=[];
+  data.forEach((r,i)=>{
+    const ll=getLL(r,i);
+    const color=regionColors[rc(r.region)]||'#666';
+    const icon=L.divIcon({className:'',html:`<div style="width:28px;height:28px;background:${color};border:3px solid #fff;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,0.25);display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff;font-weight:700;">${r.rating||''}</div>`,iconSize:[28,28],iconAnchor:[14,14]});
+    const m=L.marker(ll,{icon}).addTo(map);
+    m.bindPopup(`<div class="popup-name">${r.name}</div><div class="popup-tags"><span class="tag tag-region ${rc(r.region)}" style="color:#fff;padding:2px 6px;border-radius:4px;font-size:11px;background:${color}">${r.region}</span><span style="background:#ECFDF5;color:#065F46;padding:2px 6px;border-radius:4px;font-size:11px;">${r.cuisine}</span><span style="background:#FEF3C7;color:#92400E;padding:2px 6px;border-radius:4px;font-size:11px;">${r.price_range}</span></div><div class="popup-meta">${r.city} ${r.district}<br>${r.description}</div>${r.google_maps_url?`<a class="popup-link" href="${r.google_maps_url}" target="_blank">Google Maps</a>`:''} ${r.review_url?`<a class="popup-link" href="${r.review_url}" target="_blank" style="background:#FF6B35;">食記</a>`:''}`,{maxWidth:280});
+    markers.push(m);
+  });
+  if(data.length){const g=L.featureGroup(markers);map.fitBounds(g.getBounds().pad(0.1));}
+}
+
+/* ================================================================
+   RENDER
+   ================================================================ */
+function render(){
+  const grid=document.getElementById('mainGrid');
+  const info=document.getElementById('resultsCount');
+  const mapEl=document.getElementById('mapView');
+  const vBar=document.getElementById('viewBar');
+  grid.innerHTML='';
+
+  // show/hide view toggle only for restaurants
+  vBar.style.display=(currentTab==='restaurants')?'flex':'none';
+
+  if(currentTab==='restaurants'){
+    const data=sorted(filtered());
+    info.textContent=`${data.length} / ${restaurants.length} 筆`;
+
+    if(currentView==='map'){
+      mapEl.classList.add('show');
+      grid.style.display='none';
+      initMap();
+      setTimeout(()=>{map.invalidateSize();updateMapMarkers(data);},100);
+    } else {
+      mapEl.classList.remove('show');
+      grid.style.display='grid';
+      data.forEach((r,i)=>{
+        const c=rc(r.region);
+        grid.innerHTML+=`<div class="card ${c}" style="animation-delay:${Math.min(i*0.03,0.6)}s">
+          <div class="card-top"><span class="card-name">${r.name}</span>${r.rating?`<span class="rating-badge"><svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 22 12 18.27 5.82 22 7 14.14l-5-4.87 6.91-1.01z"/></svg>${r.rating}</span>`:''}</div>
+          <div class="card-desc">${r.description}</div>
+          <div class="tag-row"><span class="tag tag-region ${c}">${r.region}</span><span class="tag tag-cuisine">${r.cuisine}</span><span class="tag tag-price">${r.price_range}</span></div>
+          <div class="card-info"><span>${r.city} ${r.district}</span><span>${r.audience}</span></div>
+          <div class="card-info"><span>${r.source}</span></div>
+          <div class="card-actions">${r.google_maps_url?`<a class="action-btn btn-maps" href="${r.google_maps_url}" target="_blank">Google Maps</a>`:''} ${r.review_url?`<a class="action-btn btn-review" href="${r.review_url}" target="_blank">食記</a>`:''}</div>
+        </div>`;
+      });
+    }
+  } else if(currentTab==='platforms'){
+    mapEl.classList.remove('show');grid.style.display='grid';
+    info.textContent=`${platforms.length} 個平台`;
+    platforms.forEach((p,i)=>{
+      grid.innerHTML+=`<div class="pf-card" style="animation-delay:${i*0.04}s"><div class="card-top"><span class="card-name">${p.name}</span><span class="pf-type">${p.type}</span></div><div class="card-desc">${p.description}</div><div class="pf-features">${p.features}</div><div class="card-info"><span>${p.coverage}</span></div><a class="pf-link" href="${p.url}" target="_blank">前往平台 &rarr;</a></div>`;
+    });
+  } else {
+    mapEl.classList.remove('show');grid.style.display='grid';
+    info.textContent=`${bloggers.length} 位創作者`;
+    bloggers.forEach((b,i)=>{
+      grid.innerHTML+=`<div class="bl-card" style="animation-delay:${i*0.04}s"><div class="card-top"><span class="card-name">${b.name}</span><span class="bl-plat">${b.platform}</span></div><div class="card-desc">${b.description}</div><div class="card-info"><span>${b.subscribers} 訂閱</span><span>${b.specialty}</span></div></div>`;
+    });
+  }
+}
+
+init();
+</script>
+</body>
+</html>
